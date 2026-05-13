@@ -1,0 +1,305 @@
+* {
+    box-sizing: border-box;
+}
+
+body {
+    margin: 0;
+    font-family: Arial, sans-serif;
+    background: #f0f0f0;
+}
+
+.app {
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+}
+
+.topbar {
+    height: 80px;
+    background: white;
+    border-bottom: 2px solid #cfcfcf;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 30px;
+}
+
+.logo-section {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.logo {
+    width: 45px;
+    height: 45px;
+    border-radius: 50%;
+    background: #4caf50;
+}
+
+.title {
+    font-size: 32px;
+    color: #2e7d32;
+    font-weight: bold;
+}
+
+.user-panel {
+    border: 2px solid black;
+    padding: 10px 20px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-size: 20px;
+}
+
+.user-icon {
+    font-size: 24px;
+}
+
+.main-layout {
+    flex: 1;
+    display: flex;
+    padding: 20px;
+    gap: 20px;
+}
+
+.group-box {
+    border: 3px solid black;
+    background: white;
+    position: relative;
+    padding: 35px 25px 25px 25px;
+}
+
+.group-title {
+    position: absolute;
+    top: -18px;
+    left: 20px;
+    background: #f0f0f0;
+    padding: 0 12px;
+    font-size: 28px;
+}
+
+.plants-panel {
+    width: 320px;
+    display: flex;
+    flex-direction: column;
+}
+
+.plant-list {
+    flex: 1;
+    overflow-y: auto;
+    margin-bottom: 20px;
+}
+
+.plant-item {
+    border-bottom: 2px solid #d0d0d0;
+    padding: 18px;
+    font-size: 26px;
+    cursor: pointer;
+}
+
+.plant-item:hover {
+    background: #f5f5f5;
+}
+
+.plant-item.active {
+    background: #dff0d8;
+}
+
+.plant-actions {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+.right-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.form-grid {
+    display: grid;
+    grid-template-columns: 1fr 320px;
+    gap: 20px;
+    align-items: center;
+    font-size: 28px;
+}
+
+.form-grid input {
+    height: 55px;
+    font-size: 28px;
+    padding: 10px;
+    border: 2px solid black;
+}
+
+.save-section {
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 25px;
+}
+
+.state-grid {
+    display: grid;
+    grid-template-columns: 350px 220px;
+    gap: 20px;
+    align-items: center;
+    font-size: 30px;
+}
+
+.state-grid div:nth-child(even) {
+    border: 2px solid black;
+    padding: 10px;
+    background: #fafafa;
+}
+
+.apply-section {
+    display: flex;
+    justify-content: center;
+}
+
+button {
+    min-width: 180px;
+    height: 50px;
+    border: 2px solid black;
+    background: white;
+    font-size: 22px;
+    cursor: pointer;
+}
+
+button:hover {
+    background: #efefef;
+}
+
+body {
+    margin: 0;
+    font-family: Arial;
+    background: #f2f2f2;
+}
+
+.container {
+    display: flex;
+    height: 100vh;
+}
+
+.sidebar {
+    width: 260px;
+    background: white;
+    border-right: 1px solid #ccc;
+    display: flex;
+    flex-direction: column;
+}
+
+.sidebar-header {
+    padding: 20px;
+    font-size: 22px;
+    border-bottom: 1px solid #ddd;
+}
+
+#plant-list {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.plant-item {
+    padding: 15px;
+    cursor: pointer;
+    border-bottom: 1px solid #eee;
+}
+
+.plant-item:hover {
+    background: #f5f5f5;
+}
+
+.plant-item.active {
+    background: #dff0d8;
+}
+
+.sidebar-buttons {
+    display: flex;
+    gap: 10px;
+    padding: 15px;
+}
+
+.content {
+    flex: 1;
+    padding: 20px;
+}
+
+.panel {
+    background: white;
+    border: 1px solid #ccc;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.panel-title {
+    font-size: 24px;
+    margin-bottom: 20px;
+}
+
+.form-row {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 15px;
+}
+
+.form-row input {
+    width: 250px;
+    padding: 10px;
+}
+
+.actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.state-grid {
+    display: grid;
+    grid-template-columns: 250px 150px;
+    row-gap: 15px;
+    font-size: 22px;
+}
+
+.bottom-actions {
+    text-align: center;
+}
+
+button {
+    padding: 10px 25px;
+    cursor: pointer;
+    font-size: 16px;
+}
+
+button i {
+    margin-right: 8px;
+}
+
+dialog {
+    border: 2px solid black;
+    padding: 25px;
+    width: 400px;
+}
+
+dialog::backdrop {
+    background: rgba(0,0,0,0.4);
+}
+
+.dialog-content {
+    display: flex;
+    flex-direction: column;
+    gap: 20px;
+}
+
+.dialog-content input {
+    height: 45px;
+    font-size: 22px;
+    padding: 10px;
+}
+
+.dialog-buttons {
+    display: flex;
+    justify-content: flex-end;
+    gap: 10px;
+}

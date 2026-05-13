@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Smart Green House</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.0/css/all.min.css">
+</head>
+
+<body>
+    <div class="app">
+        <header class="topbar">
+            <div class="logo-section">
+                <div class="logo"></div>
+                <div class="title">Smart Green House</div>
+            </div>
+            <div class="user-panel">
+                <span class="user-icon"> </span>
+                <span>Аккаунт</span>
+            </div>
+        </header>
+        <main class="main-layout">
+            <section class="plants-panel group-box">
+                <div class="group-title">Растения</div>
+                <div id="plant-list" class="plant-list"></div>
+                <div class="plant-actions">
+                    <button id="addPlantBtn">
+                        <i class="fa-solid fa-plus"></i> Добавить
+                    </button>
+                    <button id="deletePlantBtn">
+                        <i class="fa-solid fa-trash"></i> Удалить
+                    </button>
+                </div>
+            </section>
+            <section class="right-panel">
+                <div class="group-box">
+                    <div class="group-title">Параметры</div>
+                    <div class="form-grid">
+                        <label>Название растения</label>
+                        <input id="plantName">
+                        <label>Уровень влажности почвы</label>
+                        <input type="number" id="soilHumidity">
+                        <label>Уровень освещенности</label>
+                        <input type="number" id="lightLevel">
+                        <label>Частота включения увлажнения (мин)</label>
+                        <input type="number" id="wateringInterval">
+                        <label>Частота проветривания (мин)</label>
+                        <input type="number" id="ventilationInterval">
+                    </div>
+                    <div class="save-section">
+                        <button id="saveBtn">
+                            <i class="fa-solid fa-floppy-disk"></i> Сохранить
+                        </button>
+                    </div>
+                </div>
+                <div class="group-box">
+                    <div class="group-title">Состояние</div>
+                    <div class="state-grid">
+                        <div>Температура</div>
+                        <div id="temperature">0</div>
+                        <div>Уровень воды</div>
+                        <div id="waterLevel">0%</div>
+                        <div>Влажность почвы</div>
+                        <div id="stateSoilHumidity">0%</div>
+                        <div>Влажность воздуха</div>
+                        <div id="airHumidity">0%</div>
+                    </div>
+                </div>
+                <div class="apply-section">
+                    <button id="applyBtn">
+                        <i class="fa-solid fa-play"></i> Применить
+                    </button>
+                </div>
+            </section>
+        </main>
+    </div>
+    <script src="app.js"></script>
+</body>
+
+<dialog id="addPlantDialog">
+
+    <div class="dialog-content">
+
+        <h2>Добавить растение</h2>
+
+        <input type="text" id="newPlantName" placeholder="Введите название растения">
+
+        <div class="dialog-buttons">
+            <button id="cancelAddPlant">Отмена</button>
+            <button id="confirmAddPlant">Добавить</button>
+        </div>
+
+    </div>
+
+</dialog>
+
+</html>

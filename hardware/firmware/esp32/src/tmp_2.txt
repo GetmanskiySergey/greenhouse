@@ -1,0 +1,395 @@
+#include <Arduino.h>
+#include <Wire.h>
+#include <Adafruit_SHT4x.h>
+#include <BH1750.h>
+#include <Adafruit_GFX.h>
+#include <Adafruit_SSD1306.h>
+#include <WiFi.h>
+#include <Preferences.h>
+#include <HTTPClient.h>
+#include <ArduinoJson.h>
+#include <AsyncTCP.h>
+#include <ESPAsyncWebServer.h>
+#include "esp_task_wdt.h"
+
+AsyncWebServer server(80);
+Preferences prefs;
+
+// ===================== CONFIG =====================
+struct Config
+{
+  uint16_t lightThresholdLux;
+  uint32_t lightForceIntervalMin;
+  uint32_t lightForceDurationSec;
+
+  uint16_t soilDryThreshold;
+  uint16_t soilWetThreshold;
+
+  float emaAlpha;
+
+  uint32_t pumpRunSec;
+  uint32_t pumpRecoverySec;
+
+  uint32_t fanIntervalMin;
+  uint32_t fanRunSec;
+
+  uint32_t humIntervalMin;
+  uint32_t humRunSec;
+};
+
+Config cfg = {
+    300,
+    180,
+    300,
+    1800,
+    2100,
+    0.12,
+    5,
+    10,
+    30,
+    20,
+    45,
+    15};
+
+// ===================== PINS (НЕ МЕНЯЛ) =====================
+#define SDA_PIN 21
+#define SCL_PIN 22
+
+#define SOIL_POWER 23
+#define SOIL_ADC 34
+
+#define WATER_POWER 19
+#define WATER_ADC 35
+
+#define PUMP_PIN 14
+#define FAN_PIN 27
+#define HUM_PIN 26
+#define LIGHT_PIN 25
+
+// ===================== GLOBAL STATE =====================
+String wifi_ssid, wifi_pass, server_ip;
+
+float temperature = 0;
+float humidity = 0;
+float lux = 0;
+int soilValue = 0;
+int waterValue = 0;
+
+float soilFiltered = 0;
+bool soilInit = false;
+
+// timers
+uint32_t tSensors = 0, tDisplay = 0;
+uint32_t tLightForce = 0, tFan = 0, tHum = 0, tPumpLock = 0;
+
+// ===================== SENSORS =====================
+Adafruit_SHT4x sht4;
+BH1750 bh1750;
+Adafruit_SSD1306 display(128, 64, &Wire, -1);
+
+uint32_t tWiFiCheck = 0;
+uint32_t lastGoodLoop = 0;
+
+// ===================== ACTUATORS =====================
+struct Actuator
+{
+  bool active = false;
+  uint32_t start = 0;
+  uint32_t duration = 0;
+};
+
+Actuator pump, fan, hum, lightAct;
+
+void emergencyShutdown()
+{
+  digitalWrite(PUMP_PIN, LOW);
+  digitalWrite(FAN_PIN, LOW);
+  digitalWrite(HUM_PIN, LOW);
+  digitalWrite(LIGHT_PIN, LOW);
+
+  pump.active = false;
+  fan.active = false;
+  hum.active = false;
+  lightAct.active = false;
+}
+
+// ===================== STORAGE =====================
+void loadConfigStorage()
+{
+  prefs.begin("greenhouse", true);
+  wifi_ssid = prefs.getString("ssid", "");
+  wifi_pass = prefs.getString("pass", "");
+  server_ip = prefs.getString("server", "");
+  prefs.end();
+}
+
+void saveConfigStorage()
+{
+  prefs.begin("greenhouse", false);
+  prefs.putString("ssid", wifi_ssid);
+  prefs.putString("pass", wifi_pass);
+  prefs.putString("server", server_ip);
+  prefs.end();
+}
+
+void i2cRecover()
+{
+  Wire.end();
+  delay(50);
+  Wire.begin(SDA_PIN, SCL_PIN);
+}
+
+// ===================== WIFI =====================
+bool connectWiFi()
+{
+  WiFi.mode(WIFI_STA);
+  WiFi.begin(wifi_ssid.c_str(), wifi_pass.c_str());
+
+  uint32_t t = millis();
+  while (WiFi.status() != WL_CONNECTED && millis() - t < 10000)
+  {
+    delay(100);
+  }
+  return WiFi.status() == WL_CONNECTED;
+}
+
+// ===================== CONFIG FETCH =====================
+bool fetchPlantConfig()
+{
+  if (WiFi.status() != WL_CONNECTED)
+    return false;
+
+  HTTPClient http;
+  http.setTimeout(3000);
+
+  String url = "http://" + server_ip + "/plant-config";
+
+  if (!http.begin(url))
+    return false;
+
+  int code = http.GET();
+
+  if (code != 200)
+  {
+    http.end();
+    return false;
+  }
+
+  String payload = http.getString();
+  http.end();
+
+  StaticJsonDocument<1024> doc;
+  if (deserializeJson(doc, payload))
+    return false;
+
+  cfg.lightThresholdLux = doc["light"]["threshold"] | cfg.lightThresholdLux;
+  cfg.lightForceIntervalMin = doc["light"]["force_interval"] | cfg.lightForceIntervalMin;
+  cfg.lightForceDurationSec = doc["light"]["force_duration"] | cfg.lightForceDurationSec;
+
+  cfg.soilDryThreshold = doc["soil"]["dry"] | cfg.soilDryThreshold;
+  cfg.soilWetThreshold = doc["soil"]["wet"] | cfg.soilWetThreshold;
+  cfg.emaAlpha = doc["soil"]["ema"] | cfg.emaAlpha;
+
+  cfg.pumpRunSec = doc["pump"]["run"] | cfg.pumpRunSec;
+  cfg.pumpRecoverySec = doc["pump"]["cooldown"] | cfg.pumpRecoverySec;
+
+  cfg.fanIntervalMin = doc["fan"]["interval"] | cfg.fanIntervalMin;
+  cfg.fanRunSec = doc["fan"]["run"] | cfg.fanRunSec;
+
+  cfg.humIntervalMin = doc["hum"]["interval"] | cfg.humIntervalMin;
+  cfg.humRunSec = doc["hum"]["run"] | cfg.humRunSec;
+
+  return true;
+}
+
+// ===================== SENSORS =====================
+int readSoil()
+{
+  digitalWrite(SOIL_POWER, HIGH);
+
+  int raw = analogRead(SOIL_ADC);
+  digitalWrite(SOIL_POWER, LOW);
+
+  if (!soilInit)
+  {
+    soilFiltered = raw;
+    soilInit = true;
+  }
+  else
+  {
+    soilFiltered = cfg.emaAlpha * raw + (1.0f - cfg.emaAlpha) * soilFiltered;
+  }
+
+  return (int)soilFiltered;
+}
+
+int readWater()
+{
+  digitalWrite(WATER_POWER, HIGH);
+  int v = analogRead(WATER_ADC);
+  digitalWrite(WATER_POWER, LOW);
+  return v;
+}
+
+// ===================== ACTUATORS =====================
+void startActuator(Actuator &a, int pin, uint32_t sec)
+{
+  digitalWrite(pin, HIGH);
+  a.active = true;
+  a.start = millis();
+  a.duration = sec * 1000;
+}
+
+void updateActuator(Actuator &a, int pin)
+{
+  if (a.active && millis() - a.start >= a.duration)
+  {
+    digitalWrite(pin, LOW);
+    a.active = false;
+  }
+}
+
+// ===================== CONTROL =====================
+void controlLogic(uint32_t now)
+{
+  if (now - tLightForce > cfg.lightForceIntervalMin * 60000)
+  {
+    tLightForce = now;
+    startActuator(lightAct, LIGHT_PIN, cfg.lightForceDurationSec);
+  }
+
+  if (!pump.active &&
+      soilValue < cfg.soilDryThreshold &&
+      (now - tPumpLock > cfg.pumpRecoverySec * 1000))
+  {
+    startActuator(pump, PUMP_PIN, cfg.pumpRunSec);
+    tPumpLock = now;
+  }
+
+  if (soilValue > cfg.soilWetThreshold)
+  {
+    // гистерезис
+  }
+
+  if (now - tFan > cfg.fanIntervalMin * 60000 && !fan.active)
+  {
+    tFan = now;
+    startActuator(fan, FAN_PIN, cfg.fanRunSec);
+  }
+
+  if (now - tHum > cfg.humIntervalMin * 60000 && !hum.active)
+  {
+    tHum = now;
+    startActuator(hum, HUM_PIN, cfg.humRunSec);
+  }
+}
+
+// ===================== SENSORS UPDATE =====================
+void updateSensors()
+{
+  sensors_event_t humEvent, tempEvent;
+
+  sht4.getEvent(&humEvent, &tempEvent);
+
+  temperature = tempEvent.temperature;
+  humidity = humEvent.relative_humidity;
+
+  lux = bh1750.readLightLevel();
+
+  soilValue = readSoil();
+  waterValue = readWater();
+}
+
+// ===================== DISPLAY =====================
+void updateDisplay()
+{
+  display.clearDisplay();
+  display.setCursor(0, 0);
+
+  display.printf("T: %.1f C\nH: %.1f %%\nLux: %.0f\nSoil: %d\nWater: %d\nPump: %s\nFan: %s",
+                 temperature, humidity, lux, soilValue, waterValue,
+                 pump.active ? "ON" : "OFF",
+                 fan.active ? "ON" : "OFF");
+
+  display.display();
+}
+
+// ===================== SETUP =====================
+void setup()
+{
+  Serial.begin(115200);
+
+  loadConfigStorage();
+
+  analogReadResolution(12);
+  analogSetAttenuation(ADC_11db);
+
+  esp_task_wdt_init(10, true); // 10 сек watchdog
+  esp_task_wdt_add(NULL);
+
+  pinMode(SOIL_POWER, OUTPUT);
+  pinMode(WATER_POWER, OUTPUT);
+  pinMode(PUMP_PIN, OUTPUT);
+  pinMode(FAN_PIN, OUTPUT);
+  pinMode(HUM_PIN, OUTPUT);
+  pinMode(LIGHT_PIN, OUTPUT);
+
+  digitalWrite(SOIL_POWER, LOW);
+  digitalWrite(WATER_POWER, LOW);
+
+  Wire.begin(SDA_PIN, SCL_PIN);
+
+  connectWiFi();
+  fetchPlantConfig();
+
+  sht4.begin();
+  bh1750.begin();
+  display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+}
+
+// ===================== LOOP =====================
+void loop()
+{
+  uint32_t now = millis();
+  esp_task_wdt_reset();
+
+  lastGoodLoop = now;
+
+  if (ESP.getFreeHeap() < 50000)
+  {
+    Serial.println("LOW HEAP → RESTART");
+
+    emergencyShutdown();
+    delay(200);
+    ESP.restart();
+  }
+
+  if (millis() - tWiFiCheck > 15000)
+  {
+    tWiFiCheck = millis();
+
+    if (WiFi.status() != WL_CONNECTED)
+    {
+      WiFi.disconnect();
+      WiFi.reconnect();
+    }
+  }
+
+  if (now - tSensors > 2000)
+  {
+    tSensors = now;
+    updateSensors();
+    controlLogic(now);
+  }
+
+  if (now - tDisplay > 1000)
+  {
+    tDisplay = now;
+    updateDisplay();
+  }
+
+  updateActuator(pump, PUMP_PIN);
+  updateActuator(fan, FAN_PIN);
+  updateActuator(hum, HUM_PIN);
+  updateActuator(lightAct, LIGHT_PIN);
+}
